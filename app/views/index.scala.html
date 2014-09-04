@@ -1,7 +1,10 @@
-@(message: String)
+@(original: String, after: String)
 
 @main("Welcome to Play") {
 
-    @play20.welcome(message)
+    <h1>Original</h1>
+    <p>@original</p>
+    <h1>After</h1>
+    <p>@after</p>
 
 }
