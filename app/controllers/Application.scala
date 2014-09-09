@@ -1,11 +1,12 @@
 package controllers
 
 import model.CommitInfo
+import org.eclipse.egit.github.core.service.{CommitService, RepositoryService}
 import org.json4s.jackson.JsonMethods
-import play.api._
 import play.api.mvc._
 import dispatch._
 import org.json4s._
+import scala.concurrent.future
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
@@ -19,6 +20,15 @@ object Application extends Controller {
 
   def index = Action {
 
+//    val service = new RepositoryService()
+
+
+//    val repository = future {
+//    val stuff = service.getRepository("playframework", "playframework")
+//    }
+
+//    val commits = new CommitService().getCommits(stuff)
+    /*
     val uri  = url("https://api.github.com/repos/mdotson/metrics-dashboard/commits")
 
     val responseFut = http(uri.GET)
@@ -33,6 +43,8 @@ object Application extends Controller {
     val asJson = Serialization.write(commitHistory)
 
     Ok(views.html.index(response.getResponseBody, asJson))
+    */
+    Ok(views.html.index("1", "hi"))
   }
 
 }
