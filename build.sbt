@@ -20,5 +20,6 @@ resolvers +=
 libraryDependencies ++= Seq(
   "net.databinder.dispatch" %% "dispatch-core" % "0.11.2",
   "org.json4s" %% "json4s-jackson" % "3.2.10",
-  "org.eclipse.mylyn.github" % "org.eclipse.egit.github.core" % "2.1.5"
+  "org.eclipse.mylyn.github" % "org.eclipse.egit.github.core" % "2.1.5",
+  "org.mongodb" %% "casbah" % "2.7.3"
 )
