@@ -1,52 +1,67 @@
+package global
+
 import java.util
-import java.util.concurrent.TimeUnit
 
 import com.google.gson.reflect.TypeToken
-import org.eclipse.egit.github.core.{RepositoryCommit, IRepositoryIdProvider}
-import org.eclipse.egit.github.core.client._
+import com.mongodb.casbah.Imports._
+import com.mongodb.casbah.MongoURI
 import org.eclipse.egit.github.core.client.IGitHubConstants._
 import org.eclipse.egit.github.core.client.PagedRequest._
-import org.eclipse.egit.github.core.service.{CommitService, RepositoryService}
+import org.eclipse.egit.github.core.{RepositoryCommit, IRepositoryIdProvider}
+import org.eclipse.egit.github.core.client.{PagedRequest, PageIterator, GitHubClient}
+import org.eclipse.egit.github.core.service.CommitService
 import org.joda.time.DateTime
-import org.joda.time.format.ISODateTimeFormat
-import play.api._
-import scala.collection.mutable.HashMap
-import scala.concurrent.future
-import play.api.libs.concurrent.Execution.Implicits.defaultContext
-import com.mongodb.casbah.Imports._
+import play.api.{Application, GlobalSettings}
 
-import scala.concurrent.duration.Duration
+import scala.concurrent._
+import play.api.libs.concurrent.Execution.Implicits._
 
 object Global extends GlobalSettings {
+
+  lazy val database = mongoConnection("heroku_app29365494")
+  lazy val githubClient = ghClient
+
+
+  private def mongoConnection = {
+    val uri = MongoClientURI(sys.env("MONGOLAB_URI"))
+    MongoClient(uri)
+  }
+
+  private def ghClient = {
+    val client = new GitHubClient()
+    client.setCredentials(sys.env("GITHUB_USERNAME"), sys.env("GITHUB_PASSWORD"))
+    client
+  }
 
   override def onStart(app: Application) {
     val client = new GitHubClient()
     client.setCredentials("mdotson", "m0n67McEIZGU")
 
-    import SinceUtils.CommitServiceImprovements
-
-    test
+    val col = database.getCollection("test")
+    println(col.insert(MongoDBObject("hello" -> "world")))
 
     future {
-      while (true) {
-        Logger.info("start!")
-        val service = new RepositoryService(client)
-        val stuff = service.getRepository("mdotson", "metrics-dashboard")
-        val commitService = new CommitService(client)
-        val commits1 = commitService.getCommits(stuff)
-        val commits2 = commitService.getCommits(stuff, null, null, new DateTime(2014, 7, 11, 12, 30))
-        Logger.info("end!")
-        Logger.info(commits1.size().toString + " commits1")
-        Logger.info(commits2.size().toString + " commits2")
-        Thread.sleep(Duration(10, TimeUnit.SECONDS).toMillis)
-      }
+      persistCommitHistory(client, database)
     }
   }
 
-  def test = {
-    val mongoClient = MongoClient("ds035290.mongolab.com/heroku_app29365494", 35290)
-    val db = mongoClient("test")
-    println("names: " + db.collectionNames())
+
+
+  def persistCommitHistory(client: GitHubClient, db: MongoDB) = {
+
+    val commitService = new CommitService(client)
+
+    /*
+    while (true) {
+
+      val commits1 = commitService.getCommits(repo)
+      val commits2 = commitService.getCommits(repo, null, null, new DateTime(2014, 7, 11, 12, 30))
+      Logger.info("end!")
+      Logger.info(commits1.size().toString + " commits1")
+      Logger.info(commits2.size().toString + " commits2")
+      Thread.sleep(Duration(10, TimeUnit.SECONDS).toMillis)
+    }
+    */
   }
 }
 
@@ -66,8 +81,9 @@ object SinceUtils {
     }
 
     def pageCommits(repository: IRepositoryIdProvider, sha: String, path: String, since: DateTime,
-                             size: Int): PageIterator[RepositoryCommit] = {
+                    size: Int): PageIterator[RepositoryCommit] = {
       val id: String = repository.generateId()
+      println("id is: " + id)
       val uri: java.lang.StringBuilder = new java.lang.StringBuilder(SEGMENT_REPOS)
       uri.append('/').append(id)
       uri.append(SEGMENT_COMMITS)
