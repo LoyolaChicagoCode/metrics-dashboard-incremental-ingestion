@@ -85,7 +85,7 @@ object Repositories extends Controller {
         githubRepoInfo match {
           case Success(s) => for {
             repoCollection <- repoCollectionFut
-          } yield repoCollection.insert(repoDocument)
+          } yield repoCollection.insert(MongoDBObject("_id" -> s.getId, "repo" -> repoDocument.get("repo")))
           case Failure(f) => throw new RepoNotFoundException(s"Repository $repo does not exist on GitHub.")
         }
     }
