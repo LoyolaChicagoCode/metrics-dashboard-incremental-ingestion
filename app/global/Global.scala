@@ -73,7 +73,7 @@ object Global extends GlobalSettings {
       }
       Logger.info("end!")
 
-      blocking(Thread.sleep(Duration(1, TimeUnit.DAYS).toMillis))
+      blocking(Thread.sleep(Duration(10, TimeUnit.SECONDS).toMillis))
 
       /*
       commitService.getCommits(Repository, null, null, timeSinceOpt, currentTime)
