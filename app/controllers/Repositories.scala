@@ -2,19 +2,20 @@ package controllers
 
 import java.util.concurrent.TimeUnit
 
-import com.mongodb.WriteResult
 import com.mongodb.casbah.commons.MongoDBObject
-import org.eclipse.egit.github.core.Repository
+import com.mongodb.casbah.commons.conversions.scala.{RegisterJodaTimeConversionHelpers, RegisterConversionHelpers}
 import org.eclipse.egit.github.core.service.RepositoryService
-import play.api.Logger
+import org.joda.time.DateTime
 import play.api.libs.concurrent.Execution.Implicits._
 import play.api.mvc.{Action, Controller}
-import global.Global.database
-import global.Global.githubClient
-
+import globalobj.Global.database
+import globalobj.Global.githubClient
 import scala.concurrent._
 import scala.concurrent.duration.Duration
 import scala.util.{Try, Success, Failure}
+import com.novus.salat._
+import model.Repository
+import globalobj.Global.ctx
 
 case class RepoNotFoundException(msg: String) extends Exception(msg)
 case class AlreadyExistsException(msg: String) extends Exception(msg)
@@ -32,7 +33,6 @@ object Repositories extends Controller {
   */
 
   import play.api.libs.json._
-
 
   implicit val rds = (__ \ 'repo).read[String]
 
@@ -55,7 +55,6 @@ object Repositories extends Controller {
 
   private def addRepoToDB(repo: String) = {
 
-    val repoDocument = MongoDBObject("repo" -> repo)
     val splitRepo = repo.split("/")
     if (splitRepo.size != 2)
       throw new IllegalArgumentException("Repository must have the form user/repo. Example: mdotson/metrics-dashboard")
@@ -63,29 +62,39 @@ object Repositories extends Controller {
     val repoService = new RepositoryService(githubClient)
 
     // get repo info premptively in case it's not in our DB
-    val githubRepoInfFut: Future[Try[Repository]] = future {
+    val githubRepoInfFut = future {
       Try(repoService.getRepository(splitRepo.head, splitRepo.last))
     }
 
     val repoCollectionFut = future {
-      database.getCollection("repositories")
+      database("repositories")
     }
 
+    val repoDocument = MongoDBObject("full_name" -> repo)
+
+    // check if the repo is in the DB already
     val dbRepoInfoFut = for {
       repoCollection <- repoCollectionFut
-    } yield Option(repoCollection.findOne(repoDocument))
-
+    } yield repoCollection.findOne(repoDocument)
 
     val dbRepoInfo = Await.result(dbRepoInfoFut, Duration(1, TimeUnit.SECONDS))
+
+    println("info: " + dbRepoInfo)
 
     dbRepoInfo match {
       case Some(_) => throw new AlreadyExistsException(s"Repository $repo is already being watched.")
       case None =>
+        // not in DB yet, we need to add it
         val githubRepoInfo = Await.result(githubRepoInfFut, Duration(1, TimeUnit.SECONDS))
+
+//        RegisterConversionHelpers()
+//        RegisterJodaTimeConversionHelpers()
         githubRepoInfo match {
-          case Success(s) => for {
-            repoCollection <- repoCollectionFut
-          } yield repoCollection.insert(MongoDBObject("_id" -> s.getId, "repo" -> repoDocument.get("repo")))
+          case Success(s) =>
+            for {
+              repoCollection <- repoCollectionFut
+              repoDBobj = grater[Repository].asDBObject(Repository(s.getId, repo, new DateTime(0)))
+            } yield repoCollection.insert(repoDBobj)
           case Failure(f) => throw new RepoNotFoundException(s"Repository $repo does not exist on GitHub.")
         }
     }

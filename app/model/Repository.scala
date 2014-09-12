@@ -2,4 +2,6 @@ package model
 
 import org.joda.time.DateTime
 
-case class Repository(full_name: String)
+case class Repository(_id: Long,
+                      full_name: String,
+                      last_update: DateTime)

@@ -1,20 +1,24 @@
-package global
+package globalobj
 
-import java.util
+import java.util.concurrent.TimeUnit
 
 import com.google.gson.reflect.TypeToken
-import com.mongodb.casbah.Imports._
-import com.mongodb.casbah.MongoURI
+import com.mongodb.casbah.commons.conversions.scala.{RegisterJodaTimeConversionHelpers, RegisterConversionHelpers}
 import org.eclipse.egit.github.core.client.IGitHubConstants._
 import org.eclipse.egit.github.core.client.PagedRequest._
 import org.eclipse.egit.github.core.{RepositoryCommit, IRepositoryIdProvider}
 import org.eclipse.egit.github.core.client.{PagedRequest, PageIterator, GitHubClient}
 import org.eclipse.egit.github.core.service.CommitService
 import org.joda.time.DateTime
-import play.api.{Application, GlobalSettings}
+import play.api.{Play, Logger, Application, GlobalSettings}
+import com.novus.salat._
+import com.mongodb.casbah.Imports._
+import model.Repository
 
 import scala.concurrent._
 import play.api.libs.concurrent.Execution.Implicits._
+
+import scala.concurrent.duration.Duration
 
 object Global extends GlobalSettings {
 
@@ -34,34 +38,56 @@ object Global extends GlobalSettings {
   }
 
   override def onStart(app: Application) {
-    val client = new GitHubClient()
-    client.setCredentials("mdotson", "m0n67McEIZGU")
-
-    val col = database.getCollection("test")
-    println(col.insert(MongoDBObject("hello" -> "world")))
+    RegisterConversionHelpers()
+    RegisterJodaTimeConversionHelpers()
+    ctx.registerClassLoader(Play.classloader(Play.current))
 
     future {
-      persistCommitHistory(client, database)
+      persistCommitHistorySince(githubClient, database)
     }
   }
 
+  implicit lazy val ctx = new Context {
+    val name = "Custom_Classloader"
+  }
 
-
-  def persistCommitHistory(client: GitHubClient, db: MongoDB) = {
+  def persistCommitHistorySince(client: GitHubClient, db: MongoDB) = {
 
     val commitService = new CommitService(client)
 
-    /*
     while (true) {
 
+      val currentTime = DateTime.now()
+
+      val repoCollection = database("repositories")
+
+      val allRepos = repoCollection.find().toList
+
+      Logger.info("start!")
+      // convert DBObject to Repository
+      allRepos map {
+        dbObject =>
+          val repo = grater[Repository].asObject(dbObject)
+          val repoWithTime = Repository(repo._id, repo.full_name, currentTime)
+          repoCollection.update(dbObject, grater[Repository].asDBObject(repoWithTime))
+      }
+      Logger.info("end!")
+
+      blocking(Thread.sleep(Duration(1, TimeUnit.DAYS).toMillis))
+
+      /*
+      commitService.getCommits(Repository, null, null, timeSinceOpt, currentTime)
+      */
+
+      /*
       val commits1 = commitService.getCommits(repo)
       val commits2 = commitService.getCommits(repo, null, null, new DateTime(2014, 7, 11, 12, 30))
       Logger.info("end!")
       Logger.info(commits1.size().toString + " commits1")
       Logger.info(commits2.size().toString + " commits2")
       Thread.sleep(Duration(10, TimeUnit.SECONDS).toMillis)
+      */
     }
-    */
   }
 }
 
@@ -69,21 +95,20 @@ object SinceUtils {
 
   implicit class CommitServiceImprovements(val s: CommitService) {
 
-    def getCommits(repository: IRepositoryIdProvider, sha: String, path: String, since: DateTime) = {
+    def getCommits(repository: IRepositoryIdProvider, sha: String, path: String, since: Option[DateTime], until: DateTime) = {
 
-      val iterator = s.pageCommits(repository, sha, path, since, 100)
+      val iterator = s.pageCommits(repository, sha, path, since, until, 100)
 
-      val elements = new util.ArrayList[RepositoryCommit]
+      val elements = new java.util.ArrayList[RepositoryCommit]
 
       while (iterator.hasNext) elements.addAll(iterator.next)
 
       elements
     }
 
-    def pageCommits(repository: IRepositoryIdProvider, sha: String, path: String, since: DateTime,
-                    size: Int): PageIterator[RepositoryCommit] = {
+    def pageCommits(repository: IRepositoryIdProvider, sha: String, path: String, since: Option[DateTime],
+                    until: DateTime, size: Int): PageIterator[RepositoryCommit] = {
       val id: String = repository.generateId()
-      println("id is: " + id)
       val uri: java.lang.StringBuilder = new java.lang.StringBuilder(SEGMENT_REPOS)
       uri.append('/').append(id)
       uri.append(SEGMENT_COMMITS)
@@ -94,7 +119,8 @@ object SinceUtils {
         val params: java.util.Map[String, String] = new java.util.HashMap[String, String]
         if (sha != null) params.put("sha", sha)
         if (path != null) params.put("path", path)
-        if (since != null) params.put("since", since.toString)
+        since.map(t => params.put("since", t.toString))
+        if (until != null) params.put("until", until.toString)
         request.setParams(params)
       }
       new PageIterator[RepositoryCommit](request, s.getClient)

@@ -16,8 +16,6 @@ object Application extends Controller {
   val http = Http.configure(_ setFollowRedirects true)
   implicit val formats = DefaultFormats
 
-  import scala.concurrent.ExecutionContext.Implicits.global
-
   def index = Action {
 
 //    val service = new RepositoryService()
