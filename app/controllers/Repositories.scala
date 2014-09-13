@@ -3,7 +3,6 @@ package controllers
 import java.util.concurrent.TimeUnit
 
 import com.mongodb.casbah.commons.MongoDBObject
-import com.mongodb.casbah.commons.conversions.scala.{RegisterJodaTimeConversionHelpers, RegisterConversionHelpers}
 import org.eclipse.egit.github.core.service.RepositoryService
 import org.joda.time.DateTime
 import play.api.libs.concurrent.Execution.Implicits._

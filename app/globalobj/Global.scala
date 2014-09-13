@@ -3,21 +3,20 @@ package globalobj
 import java.util.concurrent.TimeUnit
 
 import com.google.gson.reflect.TypeToken
-import com.mongodb.casbah.commons.conversions.scala.{RegisterJodaTimeConversionHelpers, RegisterConversionHelpers}
+import com.mongodb.casbah.Imports._
+import com.mongodb.casbah.commons.conversions.scala.{RegisterConversionHelpers, RegisterJodaTimeConversionHelpers}
+import com.novus.salat._
 import org.eclipse.egit.github.core.client.IGitHubConstants._
 import org.eclipse.egit.github.core.client.PagedRequest._
 import org.eclipse.egit.github.core.{RepositoryCommit, IRepositoryIdProvider}
 import org.eclipse.egit.github.core.client.{PagedRequest, PageIterator, GitHubClient}
 import org.eclipse.egit.github.core.service.CommitService
 import org.joda.time.DateTime
-import play.api.{Play, Logger, Application, GlobalSettings}
-import com.novus.salat._
-import com.mongodb.casbah.Imports._
+import play.api.{Application, GlobalSettings, Play}
+import play.api.libs.concurrent.Execution.Implicits._
 import model.Repository
 
 import scala.concurrent._
-import play.api.libs.concurrent.Execution.Implicits._
-
 import scala.concurrent.duration.Duration
 
 object Global extends GlobalSettings {
@@ -38,8 +37,10 @@ object Global extends GlobalSettings {
   }
 
   override def onStart(app: Application) {
+    // converters for salat
     RegisterConversionHelpers()
     RegisterJodaTimeConversionHelpers()
+    // use play's class loader
     ctx.registerClassLoader(Play.classloader(Play.current))
 
     future {
@@ -55,6 +56,13 @@ object Global extends GlobalSettings {
 
     val commitService = new CommitService(client)
 
+    // used for passing to SinceUtils
+    case class MyRepo(fullRepoName: String) extends IRepositoryIdProvider {
+      override def generateId() = fullRepoName
+    }
+
+    import SinceUtils.CommitServiceImprovements
+
     while (true) {
 
       val currentTime = DateTime.now()
@@ -63,15 +71,22 @@ object Global extends GlobalSettings {
 
       val allRepos = repoCollection.find().toList
 
-      Logger.info("start!")
-      // convert DBObject to Repository
       allRepos map {
+        // convert DBObject to Repository then update the repository in the DB
         dbObject =>
           val repo = grater[Repository].asObject(dbObject)
+
+          val commitCollection = database("commits")
+
+          val githubRepo = MyRepo(repo.full_name)
+
+          val commits = commitService.getCommits(githubRepo, null, null)
+//          val commits = commitService.getCommits(githubRepo, null, null, repo.last_update, currentTime)
+          println("number of commits: " + commits.size())
+
           val repoWithTime = Repository(repo._id, repo.full_name, currentTime)
           repoCollection.update(dbObject, grater[Repository].asDBObject(repoWithTime))
       }
-      Logger.info("end!")
 
       blocking(Thread.sleep(Duration(10, TimeUnit.SECONDS).toMillis))
 
@@ -95,19 +110,23 @@ object SinceUtils {
 
   implicit class CommitServiceImprovements(val s: CommitService) {
 
-    def getCommits(repository: IRepositoryIdProvider, sha: String, path: String, since: Option[DateTime], until: DateTime) = {
+    def getCommits(repository: IRepositoryIdProvider, sha: String, path: String, since: DateTime, until: DateTime) = {
 
       val iterator = s.pageCommits(repository, sha, path, since, until, 100)
 
       val elements = new java.util.ArrayList[RepositoryCommit]
 
-      while (iterator.hasNext) elements.addAll(iterator.next)
+      while (iterator.hasNext) {
+        elements.addAll(iterator.next)
+      }
 
       elements
     }
 
-    def pageCommits(repository: IRepositoryIdProvider, sha: String, path: String, since: Option[DateTime],
+    def pageCommits(repository: IRepositoryIdProvider, sha: String, path: String, since: DateTime,
                     until: DateTime, size: Int): PageIterator[RepositoryCommit] = {
+
+      println("Hello!")
       val id: String = repository.generateId()
       val uri: java.lang.StringBuilder = new java.lang.StringBuilder(SEGMENT_REPOS)
       uri.append('/').append(id)
@@ -119,7 +138,7 @@ object SinceUtils {
         val params: java.util.Map[String, String] = new java.util.HashMap[String, String]
         if (sha != null) params.put("sha", sha)
         if (path != null) params.put("path", path)
-        since.map(t => params.put("since", t.toString))
+        if (since != null) params.put("since", since.toString)
         if (until != null) params.put("until", until.toString)
         request.setParams(params)
       }
