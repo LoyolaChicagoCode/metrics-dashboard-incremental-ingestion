@@ -14,7 +14,7 @@ import org.eclipse.egit.github.core.service.CommitService
 import org.joda.time.DateTime
 import play.api.{Application, GlobalSettings, Play}
 import play.api.libs.concurrent.Execution.Implicits._
-import model.Repository
+import model.{Commit, Repository}
 
 import scala.concurrent._
 import scala.concurrent.duration.Duration
@@ -62,6 +62,7 @@ object Global extends GlobalSettings {
     }
 
     import SinceUtils.CommitServiceImprovements
+    import collection.JavaConversions._
 
     while (true) {
 
@@ -80,12 +81,23 @@ object Global extends GlobalSettings {
 
           val githubRepo = MyRepo(repo.full_name)
 
-          val commits = commitService.getCommits(githubRepo, null, null)
-//          val commits = commitService.getCommits(githubRepo, null, null, repo.last_update, currentTime)
+//          val commits = commitService.getCommits(githubRepo, null, null)
+          println("last_update: " + repo.last_update)
+          println("current: " + currentTime)
+          val commits = commitService.getCommits(githubRepo, null, null, repo.last_update, currentTime).toList
+          val stuff = commits map {
+            commit => Commit(commit.getSha)
+          }
           println("number of commits: " + commits.size())
 
-          val repoWithTime = Repository(repo._id, repo.full_name, currentTime)
-          repoCollection.update(dbObject, grater[Repository].asDBObject(repoWithTime))
+          val repoWithTime = Repository(repo._id, repo.full_name, currentTime, stuff)
+          println("time to add commits")
+          try {
+            repoCollection.update(dbObject, grater[Repository].asDBObject(repoWithTime))
+          } catch {
+            case e: Exception => println(e.getMessage)
+          }
+          println("commits updated!")
       }
 
       blocking(Thread.sleep(Duration(10, TimeUnit.SECONDS).toMillis))

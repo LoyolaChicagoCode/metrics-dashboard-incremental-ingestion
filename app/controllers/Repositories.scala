@@ -1,10 +1,11 @@
 package controllers
 
+import java.util.{Date, TimeZone}
 import java.util.concurrent.TimeUnit
 
 import com.mongodb.casbah.commons.MongoDBObject
 import org.eclipse.egit.github.core.service.RepositoryService
-import org.joda.time.DateTime
+import org.joda.time.{DateTimeZone, DateTime}
 import play.api.libs.concurrent.Execution.Implicits._
 import play.api.mvc.{Action, Controller}
 import globalobj.Global.database
@@ -86,13 +87,11 @@ object Repositories extends Controller {
         // not in DB yet, we need to add it
         val githubRepoInfo = Await.result(githubRepoInfFut, Duration(1, TimeUnit.SECONDS))
 
-//        RegisterConversionHelpers()
-//        RegisterJodaTimeConversionHelpers()
         githubRepoInfo match {
           case Success(s) =>
             for {
               repoCollection <- repoCollectionFut
-              repoDBobj = grater[Repository].asDBObject(Repository(s.getId, repo, new DateTime(0)))
+              repoDBobj = grater[Repository].asDBObject(Repository(s.getId, repo, new DateTime(1970, 1, 2, 0, 0), List.empty))
             } yield repoCollection.insert(repoDBobj)
           case Failure(f) => throw new RepoNotFoundException(s"Repository $repo does not exist on GitHub.")
         }

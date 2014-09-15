@@ -1,6 +1,5 @@
 package controllers
 
-import model.CommitInfo
 import org.eclipse.egit.github.core.service.{CommitService, RepositoryService}
 import org.json4s.jackson.JsonMethods
 import play.api.mvc._
