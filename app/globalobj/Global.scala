@@ -5,7 +5,7 @@ import java.util.concurrent.TimeUnit
 import com.mongodb.casbah.Imports._
 import com.mongodb.casbah.commons.conversions.scala.{RegisterConversionHelpers, RegisterJodaTimeConversionHelpers}
 import com.novus.salat._
-import org.eclipse.egit.github.core.IRepositoryIdProvider
+import org.eclipse.egit.github.core.{RepositoryCommit, IRepositoryIdProvider}
 import org.joda.time.DateTime
 import play.api.{Application, GlobalSettings, Play}
 import globalobj.RemoteConnections._
@@ -55,6 +55,8 @@ object Global extends GlobalSettings {
 
     while (true) {
 
+      println("start")
+
       val currentTime = DateTime.now()
 
       val allRepos = repositoriesCollection.find().toList
@@ -67,8 +69,15 @@ object Global extends GlobalSettings {
           // make object to make interface that getCommits expects
           val githubRepo = MyRepo(repo.full_name)
 
+          println("getting commits for " + repo.full_name)
           // get all commits between repo's last_update time and current time
-          val fullCommits = commitService.getCommits(githubRepo, null, null, repo.last_update, currentTime).toList
+          val fullCommits: List[RepositoryCommit] = try {
+            commitService.getCommits(githubRepo, null, null, repo.last_update, currentTime).toList
+          } catch {
+            case e: Exception => println("ugh: " + e.getMessage); null
+          }
+          println("got commits")
+          println("limit: " + githubClient.getRemainingRequests)
 
           // pull information out that we care about
           val commits = fullCommits map {

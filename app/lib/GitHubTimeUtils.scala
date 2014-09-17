@@ -30,8 +30,14 @@ object GitHubTimeUtils {
 
       val elements = new java.util.ArrayList[RepositoryCommit]
 
+      var current = 0
       while (iterator.hasNext) {
+        val it = System.currentTimeMillis()
         elements.addAll(iterator.next)
+        val it2 = System.currentTimeMillis()
+        current = current + 1
+        println("current: " + current)
+        println("time: " + (it2 - it))
       }
 
       elements
