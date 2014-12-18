@@ -1,8 +1,6 @@
-package globalobj
-
 import com.mongodb.casbah.Imports._
 import org.eclipse.egit.github.core.client.GitHubClient
-import org.eclipse.egit.github.core.service.{RepositoryService, CommitService}
+import org.eclipse.egit.github.core.service.{CommitService, RepositoryService}
 
 object RemoteConnections {
 
@@ -19,11 +17,12 @@ object RemoteConnections {
    *
    * @return the connection to the database
    */
-  private[globalobj] def mongoConnection = {
-    val mongolabVar = sys.env("MONGOLAB_URI")
-    val uri = MongoClientURI(mongolabVar)
-    val client = MongoClient(uri)
-    client(mongolabVar.substring(mongolabVar.lastIndexOf('/') + 1))
+  private def mongoConnection = {
+//    val mongolabVar = sys.env("MONGOLAB_URI")
+//    val uri = MongoClientURI(mongolabVar)
+//    val client = MongoClient(uri)
+//    client(mongolabVar.substring(mongolabVar.lastIndexOf('/') + 1))
+    MongoClient().getDB("default")
   }
 
   /**
@@ -31,7 +30,7 @@ object RemoteConnections {
    *
    * @return the GH client with the credentials
    */
-  private[globalobj] def ghClient = {
+  private def ghClient = {
     val client = new GitHubClient()
     client.setCredentials(sys.env("GITHUB_USERNAME"), sys.env("GITHUB_PASSWORD"))
     client

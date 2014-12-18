@@ -1,49 +1,49 @@
-package globalobj
-
 import java.util.concurrent.TimeUnit
 
-import com.mongodb.casbah.Imports._
-import com.mongodb.casbah.commons.conversions.scala.{RegisterConversionHelpers, RegisterJodaTimeConversionHelpers}
+import com.mongodb.casbah.commons.conversions.scala.{RegisterJodaTimeConversionHelpers, RegisterConversionHelpers}
 import com.novus.salat._
 import org.eclipse.egit.github.core.{RepositoryCommit, IRepositoryIdProvider}
 import org.joda.time.DateTime
-import play.api.{Application, GlobalSettings, Play}
-import globalobj.RemoteConnections._
-import play.api.libs.concurrent.Execution.Implicits._
-
 import model.{Commit, Repository}
 
 import scala.concurrent._
 import scala.concurrent.duration.Duration
+import RemoteConnections._
 
-object Global extends GlobalSettings {
+import scala.concurrent.ExecutionContext.Implicits.global
 
+import org.joda.time.format.ISODateTimeFormat
+import com.novus.salat.{TypeHintFrequency, StringTypeHintStrategy, Context}
+import com.novus.salat.json.{StringDateStrategy, JSONConfig}
+
+import com.mongodb.casbah.Imports._
+
+/**
+ * Created by mdotson on 12/17/14.
+ */
+object HelloWorld {
   // needed to pick up Play's classloader for salat/casbah
-  implicit lazy val ctx = new Context {
-    val name = "Custom_Classloader"
-  }
 
-  /**
-   * This is called when the application starts. Here we start the loop for adding commit history.
-   *
-   * @param app
-   */
-  override def onStart(app: Application) {
-    // converters for salat
-    RegisterConversionHelpers()
-    RegisterJodaTimeConversionHelpers()
-    // use play's class loader
-    ctx.registerClassLoader(Play.classloader(Play.current))
 
-    future {
-      persistCommitHistorySince()
-    }
+  def main(args: Array[String]) {
+
+    persistCommitHistorySince()
   }
 
   /**
    * poll the github api for new commits for all repositories every hour
    */
   def persistCommitHistorySince() {
+
+//    implicit lazy val ctx = new Context {
+//      val name = "Custom_Classloader"
+//    }
+
+    // converters for salat
+    RegisterConversionHelpers()
+    RegisterJodaTimeConversionHelpers()
+
+    import com.novus.salat.global._
 
     // used for passing to SinceUtils
     case class MyRepo(fullRepoName: String) extends IRepositoryIdProvider {
@@ -67,14 +67,14 @@ object Global extends GlobalSettings {
           val repo = grater[Repository].asObject(dbObject)
 
           // make object to make interface that getCommits expects
-          val githubRepo = MyRepo(repo.full_name)
+          val githubRepo = MyRepo(repo._id)
 
-          println("getting commits for " + repo.full_name)
+          println("getting commits for " + repo._id)
           // get all commits between repo's last_update time and current time
           val fullCommits: List[RepositoryCommit] = try {
-            commitService.getCommits(githubRepo, null, null, repo.last_update, currentTime).toList
+            commitService.getCommits(githubRepo, null, null, DateTime.parse(repo.last_updated), currentTime).toList
           } catch {
-            case e: Exception => println("ugh: " + e.getMessage); null
+            case e: Exception => println("ugh: " + e.getMessage); List.empty
           }
           println("got commits")
           println("limit: " + githubClient.getRemainingRequests)
@@ -84,8 +84,10 @@ object Global extends GlobalSettings {
             commit => Commit(commit.getSha)
           }
 
+          println("new-commits: " + commits)
+
           // update repository in database
-          val repoWithTime = Repository(repo._id, repo.full_name, currentTime, repo.commits ++ commits)
+          val repoWithTime = Repository(repo._id, repo.commit_count, currentTime.toString)
           repositoriesCollection.update(dbObject, grater[Repository].asDBObject(repoWithTime))
       }
 
