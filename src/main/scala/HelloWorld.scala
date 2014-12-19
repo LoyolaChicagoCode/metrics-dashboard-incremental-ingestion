@@ -84,14 +84,16 @@ object HelloWorld {
             commit => Commit(commit.getSha)
           }
 
-          println("new-commits: " + commits)
-
+          if (commits.size != 0) {
+            println("new-commits: " + commits.size + " for " + repo._id)
+            sys.exit(0)
+          }
           // update repository in database
           val repoWithTime = Repository(repo._id, repo.commit_count, currentTime.toString)
           repositoriesCollection.update(dbObject, grater[Repository].asDBObject(repoWithTime))
       }
 
-      blocking(Thread.sleep(Duration(10, TimeUnit.SECONDS).toMillis))
+      blocking(Thread.sleep(Duration(60, TimeUnit.SECONDS).toMillis))
     }
   }
 }
